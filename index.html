@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pengumuman Kelulusan SD Negeri 2 Palapi</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     body {
       background: linear-gradient(135deg, #d1fae5, #f3e8ff);
@@ -85,6 +86,10 @@
       transform: scale(1.05);
       box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
     }
+    .btn-check:disabled {
+      background: #d1d5db;
+      cursor: not-allowed;
+    }
     .student-photo {
       width: 120px;
       height: 120px;
@@ -121,13 +126,19 @@
     .fade-in {
       animation: fadeIn 0.6s ease-in;
     }
+    .loading::after {
+      content: 'Memuat...';
+      display: inline-block;
+      animation: dots 1.5s infinite;
+    }
+    @keyframes dots {
+      0% { content: 'Memuat.'; }
+      33% { content: 'Memuat..'; }
+      66% { content: 'Memuat...'; }
+    }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(15px); }
       to { opacity: 1; transform: translateY(0); }
-    }
-    @font-face {
-      font-family: 'Poppins';
-      src: url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
     }
     @media (max-width: 640px) {
       .container {
@@ -180,16 +191,16 @@
       <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Cek Kelulusanmu!</h2>
       <div class="mb-4">
         <label for="nisn" class="block text-sm font-medium text-gray-700 mb-2 text-center">Masukkan NISN</label>
-        <input type="text" id="nisn" class="input-nisn text-center" placeholder="Ketik NISN kamu di sini">
+        <input type="text" id="nisn" class="input-nisn text-center" placeholder="Ketik NISN kamu di sini" maxlength="10" pattern="[0-9]{10}">
       </div>
       <div class="text-center">
-        <button onclick="checkNISN()" class="btn-check">Cek Sekarang</button>
+        <button id="check-btn" onclick="checkNISN()" class="btn-check">Cek Sekarang</button>
       </div>
     </div>
 
     <div id="result" class="card p-6 hidden fade-in result-card">
       <div class="text-center">
-        <img id="student-photo" class="student-photo mx-auto" src="" alt="Foto Siswa">
+        <img id="student-photo" class="student-photo mx-auto" src="" alt="Foto Siswa" onerror="this.src='https://via.placeholder.com/150';">
       </div>
       <div class="text-center mt-4">
         <p id="nama" class="text-lg font-semibold text-gray-800"></p>
@@ -208,7 +219,6 @@
     </footer>
   </div>
 
-  <script src="https://script.google.com/macros/s/AKfycbyNdWlYQjO7KM3KGIWbu01uef3R2ODjVSKfO_UGXVcMMNG8CEhG4fI1ke6StYfnIUXC/exec"></script>
   <script>
     const motivasi = [
       "Keep shining, ilmu adalah cahaya yang bakal bawa kamu jauh!",
@@ -223,35 +233,66 @@
     }
 
     async function checkNISN() {
-      const nisn = document.getElementById('nisn').value.trim();
+      const nisnInput = document.getElementById('nisn');
+      const checkBtn = document.getElementById('check-btn');
+      const nisn = nisnInput.value.trim();
+
+      // Validate NISN
       if (!nisn) {
         alert('Yah, NISN-nya jangan lupa diisi ya!');
         return;
       }
+      if (!/^\d{10}$/.test(nisn)) {
+        alert('NISN harus 10 digit angka!');
+        return;
+      }
+
+      // Show loading state
+      checkBtn.disabled = true;
+      checkBtn.classList.add('loading');
+      checkBtn.textContent = '';
 
       try {
-        const response = await google.script.run.withSuccessHandler(displayResult).getStudentData(nisn);
+        const response = await fetch(`https://script.google.com/macros/s/AKfycbyNdWlYQjO7KM3KGIWbu01uef3R2ODjVSKfO_UGXVcMMNG8CEhG4fI1ke6StYfnIUXC/exec?nisn=${nisn}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Photo URL:', data.Link_Foto); // Debug photo URL
+        displayResult(data);
       } catch (error) {
-        alert('Oops, ada masalah! Coba lagi nanti ya.');
-        console.error(error);
+        alert('Oops, ada masalah saat menghubungi server! Coba lagi nanti ya.');
+        console.error('Error:', error);
+      } finally {
+        // Reset button state
+        checkBtn.disabled = false;
+        checkBtn.classList.remove('loading');
+        checkBtn.textContent = 'Cek Sekarang';
       }
     }
 
     function displayResult(data) {
       const resultDiv = document.getElementById('result');
-      if (!data) {
+      if (!data || data.error || !data.Nama) {
         alert('NISN tidak ditemukan, cek lagi yuk!');
         return;
       }
 
       document.getElementById('student-photo').src = data.Link_Foto || 'https://via.placeholder.com/150';
-      document.getElementById('nama').innerText = `${data.Nama}`;
-      document.getElementById('nis').innerText = `NIS: ${data.NIS}`;
-      document.getElementById('jk').innerText = `Jenis Kelamin: ${data.JK}`;
-      document.getElementById('nisn-result').innerText = `NISN: ${data.NISN}`;
-      document.getElementById('ttl').innerText = `TTL: ${data.TTL}`;
-      document.getElementById('keterangan').innerText = `Status Kelulusan: ${data.KETERANGAN}`;
-      document.getElementById('ucapan').innerText = data.KETERANGAN.toLowerCase() === 'lulus' ? 'Yay, kamu LULUS! 🎉' : '';
+      document.getElementById('nama').innerText = data.Nama || 'N/A';
+      document.getElementById('nis').innerText = `NIS: ${data.NIS || 'N/A'}`;
+      document.getElementById('jk').innerText = `Jenis Kelamin: ${data.JK || 'N/A'}`;
+      document.getElementById('nisn-result').innerText = `NISN: ${data.NISN || 'N/A'}`;
+      document.getElementById('ttl').innerText = `TTL: ${data.TTL || 'N/A'}`;
+      document.getElementById('keterangan').innerText = `Status Kelulusan: ${data.KETERANGAN || 'N/A'}`;
+      document.getElementById('ucapan').innerText = data.KETERANGAN && data.KETERANGAN.toLowerCase() === 'lulus' ? 'Yay, kamu LULUS! 🎉' : '';
       document.getElementById('motivasi').innerText = getRandomMotivasi();
       resultDiv.classList.remove('hidden');
     }
